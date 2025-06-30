@@ -1,4 +1,3 @@
-
 // Vector search utilities for RAG implementation
 // This will handle document embeddings and similarity search
 
@@ -29,6 +28,28 @@ export class VectorSearchEngine {
     console.log(`📚 Vector Search - Added ${documents.length} documents to search index`);
   }
 
+  // Enhanced search with query mapping
+  async searchWithMapping(query: string, mapping: any, topK: number = 5): Promise<SearchResult[]> {
+    console.log(`🔍 Vector Search - Enhanced search for: "${query}"`);
+    console.log(`🧠 Category: ${mapping.category}, Confidence: ${mapping.confidence}`);
+    
+    const results: SearchResult[] = this.documents
+      .map(doc => ({
+        chunk: doc,
+        similarity: this.computeEnhancedSimilarityWithMapping(query, doc.content, doc.metadata, mapping)
+      }))
+      .filter(result => result.similarity > 0.1)
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, topK);
+
+    console.log(`📊 Vector Search - Found ${results.length} relevant documents with mapping`);
+    results.forEach((result, index) => {
+      console.log(`  ${index + 1}. ${result.chunk.metadata.cardName || 'Document'} (${Math.round(result.similarity * 100)}% match)`);
+    });
+
+    return results;
+  }
+
   // Search for similar documents
   async search(query: string, topK: number = 5): Promise<SearchResult[]> {
     console.log(`🔍 Vector Search - Searching for: "${query}"`);
@@ -49,6 +70,81 @@ export class VectorSearchEngine {
     });
 
     return results;
+  }
+
+  // Enhanced similarity computation with metadata consideration
+  private computeEnhancedSimilarityWithMapping(query: string, content: string, metadata: any, mapping: any): number {
+    const queryLower = query.toLowerCase();
+    const contentLower = content.toLowerCase();
+    const queryWords = queryLower.split(' ').filter(word => word.length > 2);
+    
+    let similarity = 0;
+    
+    // Basic keyword matching (40% weight)
+    const contentWords = contentLower.split(' ');
+    const intersection = queryWords.filter(word => contentWords.includes(word));
+    const basicScore = intersection.length / queryWords.length;
+    similarity += basicScore * 0.4;
+    
+    // Category-specific boosting (30% weight)
+    if (mapping.suggestedFilters) {
+      let categoryBoost = 0;
+      
+      // Bank matching
+      if (mapping.suggestedFilters.banks) {
+        const bankMatch = mapping.suggestedFilters.banks.some(bank => 
+          contentLower.includes(bank.toLowerCase()) || 
+          (metadata.bankName && metadata.bankName.toLowerCase().includes(bank.toLowerCase()))
+        );
+        if (bankMatch) categoryBoost += 0.4;
+      }
+      
+      // Feature matching
+      if (mapping.suggestedFilters.features) {
+        const featureMatches = mapping.suggestedFilters.features.filter(feature =>
+          contentLower.includes(feature.toLowerCase())
+        );
+        categoryBoost += (featureMatches.length / mapping.suggestedFilters.features.length) * 0.3;
+      }
+      
+      // Card type matching
+      if (mapping.suggestedFilters.cardTypes) {
+        const typeMatch = mapping.suggestedFilters.cardTypes.some(type =>
+          contentLower.includes(type.toLowerCase())
+        );
+        if (typeMatch) categoryBoost += 0.2;
+      }
+      
+      similarity += categoryBoost * 0.3;
+    }
+    
+    // Metadata boosting (20% weight)
+    if (metadata.cardName && queryLower.includes(metadata.cardName.toLowerCase())) {
+      similarity += 0.15;
+    }
+    if (metadata.bankName && queryLower.includes(metadata.bankName.toLowerCase())) {
+      similarity += 0.1;
+    }
+    
+    // Query mapping confidence boost (10% weight)
+    similarity += mapping.confidence * 0.1;
+    
+    // Specific feature matching with higher precision
+    const preciseMatches = [
+      queryLower.includes('annual fee') && contentLower.includes('annual fee'),
+      queryLower.includes('joining fee') && contentLower.includes('joining fee'),
+      queryLower.includes('reward') && (contentLower.includes('reward') || contentLower.includes('point')),
+      queryLower.includes('cashback') && contentLower.includes('cashback'),
+      queryLower.includes('lounge') && contentLower.includes('lounge'),
+      queryLower.includes('travel') && contentLower.includes('travel'),
+      queryLower.includes('interest') && contentLower.includes('interest'),
+      queryLower.includes('eligibility') && contentLower.includes('eligibility')
+    ];
+    
+    const preciseBoost = preciseMatches.filter(Boolean).length * 0.05;
+    similarity += preciseBoost;
+    
+    return Math.min(similarity, 1.0); // Cap at 1.0
   }
 
   // Enhanced similarity computation with metadata consideration
@@ -143,6 +239,16 @@ export class VectorSearchEngine {
           cardName: 'ICICI Amazon Pay',
           bankName: 'ICICI Bank',
           section: 'Cashback'
+        }
+      },
+      {
+        id: 'mitc-hdfc-swiggy-1',
+        content: 'HDFC Swiggy Credit Card joining fee is Rs. 500 plus applicable taxes. The card offers 10% cashback on Swiggy orders and 5% cashback on other online food delivery platforms. Annual fee is waived on spending Rs. 2 lakh in a year.',
+        source: 'MITC',
+        metadata: {
+          cardName: 'HDFC Swiggy',
+          bankName: 'HDFC Bank',
+          section: 'Fees & Cashback'
         }
       }
     ];
