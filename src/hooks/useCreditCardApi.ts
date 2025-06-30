@@ -9,6 +9,8 @@ interface CreditCard {
   eligibility?: string;
   bank_name?: string;
   card_network?: string;
+  joining_fee?: string;
+  benefits?: string;
 }
 
 export const useCreditCardApi = () => {
@@ -45,19 +47,29 @@ export const useCreditCardApi = () => {
       const data = await response.json();
       console.log('BankKaro API Response:', data);
 
+      // Extract cards data from the response
+      let cards = [];
+      if (data.data && Array.isArray(data.data)) {
+        cards = data.data;
+      } else if (Array.isArray(data)) {
+        cards = data;
+      } else {
+        console.log('Unexpected API response format:', data);
+        return [];
+      }
+
       // Filter results based on query if needed
-      let filteredCards = data.data || data || [];
-      
-      if (query && filteredCards.length > 0) {
+      if (query && cards.length > 0) {
         const queryLower = query.toLowerCase();
-        filteredCards = filteredCards.filter((card: CreditCard) => 
+        cards = cards.filter((card: CreditCard) => 
           card.card_name?.toLowerCase().includes(queryLower) ||
           card.bank_name?.toLowerCase().includes(queryLower) ||
-          card.key_features?.toLowerCase().includes(queryLower)
+          card.key_features?.toLowerCase().includes(queryLower) ||
+          card.benefits?.toLowerCase().includes(queryLower)
         );
       }
 
-      return filteredCards.slice(0, 10); // Limit to top 10 results
+      return cards.slice(0, 10); // Limit to top 10 results
     } catch (err) {
       console.error('Error fetching credit cards:', err);
       setError(err instanceof Error ? err.message : 'Unknown error occurred');

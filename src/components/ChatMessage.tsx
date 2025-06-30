@@ -1,7 +1,7 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { Bot, User, ExternalLink, FileText } from 'lucide-react';
+import { Bot, User, ExternalLink, FileText, Database } from 'lucide-react';
 import { SearchResult } from '@/utils/vectorSearch';
 
 interface Message {
@@ -45,11 +45,11 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
   const getSourceIcon = (source?: string) => {
     switch (source) {
       case 'API':
-        return '🔌';
+        return <Database className="w-3 h-3 mr-1" />;
       case 'MITC':
-        return '📚';
+        return <FileText className="w-3 h-3 mr-1" />;
       case 'OpenAI':
-        return '🤖';
+        return <Bot className="w-3 h-3 mr-1" />;
       default:
         return '⚠️';
     }
@@ -57,12 +57,12 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
 
   return (
     <div className={`flex ${message.isUser ? 'justify-end' : 'justify-start'} mb-4`}>
-      <div className={`flex ${message.isUser ? 'flex-row-reverse' : 'flex-row'} items-start space-x-3 max-w-[85%]`}>
-        <div className={`p-2 rounded-full ${message.isUser ? 'bg-blue-500' : 'bg-gray-700'} transition-all duration-300 hover:scale-110`}>
+      <div className={`flex ${message.isUser ? 'flex-row-reverse' : 'flex-row'} items-start space-x-3 max-w-[90%] md:max-w-[85%]`}>
+        <div className={`p-2 rounded-full ${message.isUser ? 'bg-blue-500' : 'bg-gray-700'} transition-all duration-300 hover:scale-110 flex-shrink-0`}>
           {message.isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
         </div>
         
-        <Card className={`p-4 ${
+        <Card className={`p-3 md:p-4 ${
           message.isUser 
             ? 'bg-blue-600/20 border-blue-500/30' 
             : 'bg-gray-800/50 border-gray-700/50'
@@ -73,11 +73,11 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
           
           {!message.isUser && (
             <>
-              <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-700/30">
-                <div className="flex items-center space-x-2">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mt-3 pt-3 border-t border-gray-700/30 gap-2">
+                <div className="flex items-center space-x-2 flex-wrap">
                   {message.source && (
-                    <Badge className={`text-xs px-3 py-1 transition-all duration-300 cursor-pointer ${getSourceColor(message.source)}`}>
-                      <span className="mr-1">{getSourceIcon(message.source)}</span>
+                    <Badge className={`text-xs px-2 py-1 transition-all duration-300 cursor-pointer ${getSourceColor(message.source)} flex items-center`}>
+                      {getSourceIcon(message.source)}
                       {message.source}
                     </Badge>
                   )}
@@ -89,7 +89,10 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
                 </div>
                 
                 <span className="text-xs text-gray-500">
-                  {message.timestamp.toLocaleTimeString()}
+                  {message.timestamp.toLocaleTimeString([], { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                  })}
                 </span>
               </div>
 
@@ -104,10 +107,10 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
                     {message.sourceDocuments.slice(0, 2).map((result, index) => (
                       <div key={index} className="bg-gray-800/30 rounded-lg p-2 border border-gray-700/20">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs font-medium text-gray-300">
+                          <span className="text-xs font-medium text-gray-300 truncate">
                             {result.chunk.metadata.cardName || 'Credit Card Info'}
                           </span>
-                          <Badge variant="outline" className="text-xs">
+                          <Badge variant="outline" className="text-xs flex-shrink-0">
                             {Math.round(result.similarity * 100)}% match
                           </Badge>
                         </div>
@@ -125,13 +128,18 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
                 <div className="mt-3 pt-3 border-t border-gray-700/30">
                   <p className="text-xs text-green-400 font-medium mb-2 flex items-center">
                     <ExternalLink className="w-3 h-3 mr-1" />
-                    Related Cards:
+                    Related Cards from BankKaro API:
                   </p>
-                  <div className="space-y-1">
-                    {message.data.slice(0, 2).map((card: any, index: number) => (
-                      <div key={index} className="flex items-center justify-between text-xs bg-green-500/10 rounded p-2">
-                        <span className="text-gray-300 font-medium">{card.card_name || 'Credit Card'}</span>
-                        <span className="text-green-400">{card.annual_fee || 'Fee N/A'}</span>
+                  <div className="space-y-2">
+                    {message.data.slice(0, 3).map((card: any, index: number) => (
+                      <div key={index} className="flex flex-col sm:flex-row sm:items-center sm:justify-between text-xs bg-green-500/10 rounded p-2 gap-1">
+                        <span className="text-gray-300 font-medium truncate">
+                          {card.card_name || 'Credit Card'} 
+                          {card.bank_name && ` - ${card.bank_name}`}
+                        </span>
+                        <span className="text-green-400 text-xs flex-shrink-0">
+                          {card.annual_fee || 'Fee N/A'}
+                        </span>
                       </div>
                     ))}
                   </div>
