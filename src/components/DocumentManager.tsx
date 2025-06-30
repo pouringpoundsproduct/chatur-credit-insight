@@ -135,7 +135,7 @@ const DocumentManager = () => {
                     <div className="flex flex-wrap gap-2">
                       {Object.entries(indexStats.banks).map(([bank, count]) => (
                         <Badge key={bank} variant="outline" className="text-blue-400">
-                          {bank} ({count})
+                          {bank} ({Number(count)})
                         </Badge>
                       ))}
                     </div>
@@ -148,7 +148,7 @@ const DocumentManager = () => {
                     <div className="flex flex-wrap gap-2">
                       {Object.entries(indexStats.cards).map(([card, count]) => (
                         <Badge key={card} variant="outline" className="text-green-400">
-                          {card} ({count})
+                          {card} ({Number(count)})
                         </Badge>
                       ))}
                     </div>
