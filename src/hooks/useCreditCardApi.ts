@@ -21,7 +21,7 @@ export const useCreditCardApi = () => {
     setIsLoading(true);
     setError(null);
     
-    console.log('🔍 BankKaro API - Starting search for:', query);
+    console.log('🔍 BankKaro API - Starting enhanced search for:', query);
 
     try {
       const response = await fetch('https://bk-api.bankkaro.com/sp/api/cards', {
@@ -47,7 +47,7 @@ export const useCreditCardApi = () => {
       }
 
       const data = await response.json();
-      console.log('📊 BankKaro API - Raw response received:', data);
+      console.log('📊 BankKaro API - Raw response received');
 
       // Extract cards data from the response
       let cards = [];
@@ -56,19 +56,20 @@ export const useCreditCardApi = () => {
       } else if (Array.isArray(data)) {
         cards = data;
       } else {
-        console.log('⚠️ BankKaro API - Unexpected response format:', data);
+        console.log('⚠️ BankKaro API - Unexpected response format');
         return [];
       }
 
       console.log(`📋 BankKaro API - Total cards found: ${cards.length}`);
 
-      // Less aggressive filtering - only filter if we have a meaningful query
+      // Enhanced filtering with better relevance scoring
       if (query && query.trim().length > 2 && cards.length > 0) {
         const queryLower = query.toLowerCase();
+        const queryWords = queryLower.split(' ').filter(word => word.length > 2);
         
-        console.log('🔎 BankKaro API - Applying basic filter for query:', queryLower);
+        console.log('🔎 BankKaro API - Applying enhanced filtering for:', queryWords);
         
-        const filteredCards = cards.filter((card: CreditCard) => {
+        const scoredCards = cards.map((card: CreditCard) => {
           const searchableText = [
             card.card_name || '',
             card.bank_name || '',
@@ -78,33 +79,59 @@ export const useCreditCardApi = () => {
             card.eligibility || ''
           ].join(' ').toLowerCase();
 
-          // Very basic matching - if query contains common words, return more results
-          const commonWords = ['card', 'credit', 'bank', 'fee', 'reward', 'cashback', 'travel', 'lounge'];
-          const hasCommonWord = commonWords.some(word => queryLower.includes(word));
+          let score = 0;
           
-          if (hasCommonWord) {
-            // For common queries, return more cards but prioritize exact matches
-            return searchableText.length > 0; // Return all cards with content
+          // Exact phrase matching (highest score)
+          if (searchableText.includes(queryLower)) {
+            score += 10;
           }
           
-          // For specific queries, look for partial matches
-          const queryWords = queryLower.split(' ').filter(word => word.length > 2);
-          return queryWords.some(word => searchableText.includes(word));
+          // Individual word matching
+          queryWords.forEach(word => {
+            if (searchableText.includes(word)) {
+              score += 2;
+            }
+          });
+          
+          // Bank name specific matching
+          if (card.bank_name && queryWords.some(word => 
+            card.bank_name!.toLowerCase().includes(word)
+          )) {
+            score += 5;
+          }
+          
+          // Card name specific matching
+          if (card.card_name && queryWords.some(word => 
+            card.card_name!.toLowerCase().includes(word)
+          )) {
+            score += 5;
+          }
+          
+          // Feature-specific matching
+          const featureWords = ['reward', 'cashback', 'lounge', 'travel', 'fuel', 'dining', 'fee'];
+          featureWords.forEach(feature => {
+            if (queryLower.includes(feature) && searchableText.includes(feature)) {
+              score += 3;
+            }
+          });
+          
+          return { card, score };
         });
         
-        console.log(`✅ BankKaro API - Filtered from ${cards.length} to ${filteredCards.length} cards`);
+        // Filter cards with score > 0 and sort by score
+        const filteredCards = scoredCards
+          .filter(item => item.score > 0)
+          .sort((a, b) => b.score - a.score)
+          .map(item => item.card);
         
-        // If filtering results in too few cards, return more
-        if (filteredCards.length < 3 && cards.length > 3) {
-          console.log('🔄 BankKaro API - Too few results after filtering, returning top 10 cards');
-          return cards.slice(0, 10);
-        }
+        console.log(`✅ BankKaro API - Enhanced filtering: ${cards.length} → ${filteredCards.length} cards`);
         
-        return filteredCards.slice(0, 10);
+        // Return top 15 results for better variety
+        return filteredCards.slice(0, 15);
       }
 
       // For empty or very short queries, return top cards
-      const finalResults = cards.slice(0, 10);
+      const finalResults = cards.slice(0, 12);
       console.log(`🎯 BankKaro API - Returning ${finalResults.length} cards (no filtering applied)`);
       
       return finalResults;

@@ -1,5 +1,5 @@
 
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf';
+import * as pdfjsLib from 'pdfjs-dist';
 
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
@@ -64,22 +64,25 @@ export class PDFProcessor {
       
       console.log('✅ PDF Processor - Text extraction completed');
       
+      // Safely access metadata properties
+      const info = metadata.info as any;
+      
       return {
         text: fullText.trim(),
         pages: totalPages,
         metadata: {
-          title: metadata.info?.Title,
-          author: metadata.info?.Author,
-          subject: metadata.info?.Subject,
-          creator: metadata.info?.Creator,
-          producer: metadata.info?.Producer,
-          creationDate: metadata.info?.CreationDate,
-          modificationDate: metadata.info?.ModDate,
+          title: info?.Title || undefined,
+          author: info?.Author || undefined,
+          subject: info?.Subject || undefined,
+          creator: info?.Creator || undefined,
+          producer: info?.Producer || undefined,
+          creationDate: info?.CreationDate || undefined,
+          modificationDate: info?.ModDate || undefined,
         }
       };
     } catch (error) {
       console.error('❌ PDF Processor - Extraction failed:', error);
-      throw new Error(`Failed to extract text from PDF: ${error.message}`);
+      throw new Error(`Failed to extract text from PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -107,7 +110,7 @@ export class PDFProcessor {
     // Extract card name and bank from filename
     const cardInfo = this.extractCardInfo(fileName);
     
-    // Split text into meaningful sections
+    // Split text into meaningful sections with improved algorithm
     const sections = this.splitIntoSections(text);
     
     sections.forEach((section, index) => {
@@ -131,33 +134,33 @@ export class PDFProcessor {
   private extractCardInfo(fileName: string): { cardName?: string; bankName?: string } {
     const fileNameLower = fileName.toLowerCase();
     
-    // Common bank patterns
+    // Enhanced bank patterns
     const bankPatterns = {
-      hdfc: ['hdfc', 'housing development finance'],
-      sbi: ['sbi', 'state bank of india'],
-      icici: ['icici'],
-      axis: ['axis'],
-      kotak: ['kotak'],
-      indusind: ['indusind'],
-      citibank: ['citi', 'citibank'],
-      americanexpress: ['amex', 'american express'],
-      standardchartered: ['standard chartered', 'sc bank'],
+      'HDFC Bank': ['hdfc', 'housing development finance'],
+      'State Bank of India': ['sbi', 'state bank of india'],
+      'ICICI Bank': ['icici'],
+      'Axis Bank': ['axis'],
+      'Kotak Mahindra Bank': ['kotak'],
+      'IndusInd Bank': ['indusind'],
+      'Citibank': ['citi', 'citibank'],
+      'American Express': ['amex', 'american express'],
+      'Standard Chartered': ['standard chartered', 'sc bank'],
     };
     
-    // Common card patterns
+    // Enhanced card patterns
     const cardPatterns = {
-      regalia: ['regalia'],
-      millennia: ['millennia'],
-      diners: ['diners'],
-      magnus: ['magnus'],
-      amazon: ['amazon'],
-      flipkart: ['flipkart'],
-      simplyclicK: ['simplyclick', 'simply click'],
-      cashback: ['cashback', 'cash back'],
-      rewards: ['rewards', 'reward'],
-      premium: ['premium'],
-      platinum: ['platinum'],
-      gold: ['gold'],
+      'Regalia': ['regalia'],
+      'Millennia': ['millennia'],
+      'Diners Club': ['diners'],
+      'Magnus': ['magnus'],
+      'Amazon Pay': ['amazon'],
+      'Flipkart': ['flipkart'],
+      'SimplyCLICK': ['simplyclick', 'simply click'],
+      'Cashback': ['cashback', 'cash back'],
+      'Rewards': ['rewards', 'reward'],
+      'Premium': ['premium'],
+      'Platinum': ['platinum'],
+      'Gold': ['gold'],
     };
     
     let bankName: string | undefined;
@@ -166,7 +169,7 @@ export class PDFProcessor {
     // Find bank
     for (const [bank, patterns] of Object.entries(bankPatterns)) {
       if (patterns.some(pattern => fileNameLower.includes(pattern))) {
-        bankName = bank.toUpperCase();
+        bankName = bank;
         break;
       }
     }
@@ -190,14 +193,15 @@ export class PDFProcessor {
       if (pageContent.trim()) {
         const pageNumber = pageIndex;
         
-        // Look for common MITC sections
+        // Enhanced section patterns for better categorization
         const sectionPatterns = [
-          { pattern: /(fees?|charges?|annual fee|joining fee)/i, type: 'Fees & Charges' },
-          { pattern: /(reward|points?|cashback|benefits?)/i, type: 'Rewards & Benefits' },
-          { pattern: /(eligibility|criteria|income|age)/i, type: 'Eligibility' },
-          { pattern: /(interest|apr|finance charge)/i, type: 'Interest & Finance' },
-          { pattern: /(terms|conditions|agreement)/i, type: 'Terms & Conditions' },
-          { pattern: /(lounge|travel|insurance)/i, type: 'Travel Benefits' },
+          { pattern: /(fees?|charges?|annual fee|joining fee|interest rate)/i, type: 'Fees & Charges' },
+          { pattern: /(reward|points?|cashback|benefits?|earn)/i, type: 'Rewards & Benefits' },
+          { pattern: /(eligibility|criteria|income|age|qualification)/i, type: 'Eligibility' },
+          { pattern: /(interest|apr|finance charge|outstanding)/i, type: 'Interest & Finance' },
+          { pattern: /(terms|conditions|agreement|policy)/i, type: 'Terms & Conditions' },
+          { pattern: /(lounge|travel|insurance|airport)/i, type: 'Travel Benefits' },
+          { pattern: /(fuel|dining|grocery|shopping|category)/i, type: 'Spending Categories' },
         ];
         
         let sectionType = 'General';
@@ -208,16 +212,46 @@ export class PDFProcessor {
           }
         }
         
-        // Split page into paragraphs
-        const paragraphs = pageContent.split('\n').filter(p => p.trim().length > 30);
+        // Improved text chunking - split by sentences and paragraphs
+        const sentences = pageContent.split(/[.!?]+/).filter(s => s.trim().length > 50);
         
-        paragraphs.forEach(paragraph => {
-          sections.push({
-            content: paragraph.trim(),
-            pageNumber,
-            type: sectionType
+        if (sentences.length === 0) {
+          // If no sentences found, use paragraph splitting
+          const paragraphs = pageContent.split('\n').filter(p => p.trim().length > 50);
+          paragraphs.forEach(paragraph => {
+            sections.push({
+              content: paragraph.trim(),
+              pageNumber,
+              type: sectionType
+            });
           });
-        });
+        } else {
+          // Group sentences into meaningful chunks
+          let currentChunk = '';
+          sentences.forEach(sentence => {
+            if (currentChunk.length + sentence.length < 500) {
+              currentChunk += sentence.trim() + '. ';
+            } else {
+              if (currentChunk.trim()) {
+                sections.push({
+                  content: currentChunk.trim(),
+                  pageNumber,
+                  type: sectionType
+                });
+              }
+              currentChunk = sentence.trim() + '. ';
+            }
+          });
+          
+          // Add remaining chunk
+          if (currentChunk.trim()) {
+            sections.push({
+              content: currentChunk.trim(),
+              pageNumber,
+              type: sectionType
+            });
+          }
+        }
       }
     });
     

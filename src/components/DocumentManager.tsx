@@ -4,44 +4,81 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FileText, Database, BarChart3, RefreshCw } from 'lucide-react';
+import { FileText, Database, BarChart3, RefreshCw, AlertCircle } from 'lucide-react';
 import MITCUploader from './MITCUploader';
 import { vectorSearch } from '@/utils/vectorSearch';
 import { ProcessedMITCDocument } from '@/utils/pdfProcessor';
+import { useToast } from '@/hooks/use-toast';
 
 const DocumentManager = () => {
   const [indexStats, setIndexStats] = useState<any>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const refreshStats = async () => {
     setIsRefreshing(true);
+    setError(null);
     try {
       const stats = vectorSearch.getIndexStats();
       setIndexStats(stats);
+      console.log('📊 Document Manager - Stats refreshed:', stats);
     } catch (error) {
-      console.error('Failed to refresh stats:', error);
+      console.error('❌ Failed to refresh stats:', error);
+      setError('Failed to refresh statistics');
+      toast({
+        title: "Error",
+        description: "Failed to refresh document statistics",
+        variant: "destructive",
+      });
     } finally {
       setIsRefreshing(false);
     }
   };
 
   const handleDocumentProcessed = (document: ProcessedMITCDocument) => {
-    console.log('📄 Document processed:', document.fileName);
+    console.log('📄 Document processed successfully:', document.fileName);
     refreshStats(); // Refresh stats when new document is added
+    toast({
+      title: "Document Added",
+      description: `${document.fileName} has been processed and added to the search index`,
+    });
   };
 
   const loadSampleDocuments = async () => {
     try {
       await vectorSearch.loadMITCDocuments();
       refreshStats();
+      toast({
+        title: "Sample Documents Loaded",
+        description: "Sample MITC documents have been loaded successfully",
+      });
     } catch (error) {
-      console.error('Failed to load sample documents:', error);
+      console.error('❌ Failed to load sample documents:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load sample documents",
+        variant: "destructive",
+      });
     }
   };
 
   const clearAllDocuments = () => {
-    vectorSearch.clearDocuments();
-    refreshStats();
+    try {
+      vectorSearch.clearDocuments();
+      refreshStats();
+      toast({
+        title: "Documents Cleared",
+        description: "All documents have been removed from the search index",
+      });
+    } catch (error) {
+      console.error('❌ Failed to clear documents:', error);
+      toast({
+        title: "Error",
+        description: "Failed to clear documents",
+        variant: "destructive",
+      });
+    }
   };
 
   useEffect(() => {
@@ -67,6 +104,13 @@ const DocumentManager = () => {
             Refresh
           </Button>
         </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-900/20 border border-red-500/30 rounded-lg flex items-center">
+            <AlertCircle className="w-4 h-4 text-red-400 mr-2" />
+            <span className="text-red-400 text-sm">{error}</span>
+          </div>
+        )}
 
         <Tabs defaultValue="upload" className="w-full">
           <TabsList className="grid w-full grid-cols-3 bg-gray-800">
@@ -163,7 +207,7 @@ const DocumentManager = () => {
               <Card className="p-4 bg-gray-800/50 border-gray-700/30">
                 <h4 className="font-semibold text-white mb-2">Sample Documents</h4>
                 <p className="text-gray-400 text-sm mb-4">
-                  Load sample MITC documents to test the system functionality.
+                  Load comprehensive sample MITC documents to test the system functionality with realistic data.
                 </p>
                 <Button onClick={loadSampleDocuments} variant="outline">
                   Load Sample Documents
@@ -173,7 +217,7 @@ const DocumentManager = () => {
               <Card className="p-4 bg-gray-800/50 border-gray-700/30 border-red-500/20">
                 <h4 className="font-semibold text-red-400 mb-2">Danger Zone</h4>
                 <p className="text-gray-400 text-sm mb-4">
-                  Clear all documents from the search index. This action cannot be undone.
+                  Clear all documents from the search index. This action cannot be undone and will remove all uploaded and sample documents.
                 </p>
                 <Button onClick={clearAllDocuments} variant="destructive">
                   Clear All Documents
