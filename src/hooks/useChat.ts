@@ -1,5 +1,6 @@
 
 import { useState } from 'react';
+import { SearchResult } from '@/utils/vectorSearch';
 
 interface Message {
   id: string;
@@ -9,6 +10,7 @@ interface Message {
   source?: string;
   confidence?: number;
   data?: any;
+  sourceDocuments?: SearchResult[];
 }
 
 export const useChat = () => {
