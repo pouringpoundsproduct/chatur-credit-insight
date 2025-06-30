@@ -9,7 +9,9 @@ export interface OpenAIResponse {
 
 export const queryOpenAI = async (query: string, context?: string): Promise<OpenAIResponse> => {
   try {
-    console.log('Calling OpenAI via Supabase Edge Function...');
+    console.log('🤖 Calling OpenAI via Supabase Edge Function...');
+    console.log('📝 Query:', query);
+    console.log('📄 Context provided:', !!context);
     
     const { data, error } = await supabase.functions.invoke('openai-chat', {
       body: {
@@ -22,15 +24,17 @@ export const queryOpenAI = async (query: string, context?: string): Promise<Open
     });
 
     if (error) {
-      console.error('Supabase function error:', error);
+      console.error('❌ Supabase function error:', error);
       throw new Error(error.message);
     }
 
     if (!data) {
+      console.error('❌ No response from OpenAI service');
       throw new Error('No response from OpenAI service');
     }
 
-    console.log('OpenAI response received:', data);
+    console.log('✅ OpenAI response received successfully');
+    console.log('📊 Response confidence:', data.confidence || 70);
     
     return {
       text: data.text,
@@ -39,9 +43,9 @@ export const queryOpenAI = async (query: string, context?: string): Promise<Open
     };
 
   } catch (error) {
-    console.error('Error calling OpenAI:', error);
+    console.error('❌ Error calling OpenAI:', error);
     
-    // Return a fallback response
+    // Return a fallback response with clear error indication
     return {
       text: "I'm experiencing some technical difficulties connecting to my AI service. Please try rephrasing your question or contact support if the issue persists.",
       confidence: 30,
