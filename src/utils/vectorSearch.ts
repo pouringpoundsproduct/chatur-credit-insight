@@ -1,4 +1,3 @@
-
 // Vector search utilities for RAG implementation
 // This will handle document embeddings and similarity search
 
@@ -27,6 +26,41 @@ export class VectorSearchEngine {
   async addDocuments(documents: DocumentChunk[]) {
     this.documents = [...this.documents, ...documents];
     console.log(`📚 Vector Search - Added ${documents.length} documents to search index`);
+    console.log(`📊 Vector Search - Total documents in index: ${this.documents.length}`);
+  }
+
+  // Clear all documents from the index
+  clearDocuments() {
+    this.documents = [];
+    this.embeddings.clear();
+    console.log('🗑️ Vector Search - Cleared all documents from index');
+  }
+
+  // Get statistics about the current index
+  getIndexStats() {
+    const stats = {
+      totalDocuments: this.documents.length,
+      sources: {} as Record<string, number>,
+      banks: {} as Record<string, number>,
+      cards: {} as Record<string, number>
+    };
+
+    this.documents.forEach(doc => {
+      // Count by source
+      stats.sources[doc.source] = (stats.sources[doc.source] || 0) + 1;
+      
+      // Count by bank
+      if (doc.metadata.bankName) {
+        stats.banks[doc.metadata.bankName] = (stats.banks[doc.metadata.bankName] || 0) + 1;
+      }
+      
+      // Count by card
+      if (doc.metadata.cardName) {
+        stats.cards[doc.metadata.cardName] = (stats.cards[doc.metadata.cardName] || 0) + 1;
+      }
+    });
+
+    return stats;
   }
 
   // Search for similar documents with better keyword matching
@@ -50,7 +84,7 @@ export class VectorSearchEngine {
     return results;
   }
 
-  // Advanced similarity computation
+  // Advanced similarity computation with better PDF content handling
   private computeAdvancedSimilarity(query: string, content: string, metadata: any): number {
     const queryLower = query.toLowerCase();
     const contentLower = content.toLowerCase();
@@ -60,37 +94,98 @@ export class VectorSearchEngine {
     
     // Exact phrase matching (high weight)
     if (contentLower.includes(queryLower)) {
-      similarity += 0.4;
+      similarity += 0.5;
     }
     
-    // Individual word matching
-    const contentWords = contentLower.split(' ');
-    const matchingWords = queryWords.filter(word => contentWords.includes(word));
+    // Individual word matching with enhanced scoring
+    const contentWords = contentLower.split(/\s+/);
+    const matchingWords = queryWords.filter(word => 
+      contentWords.some(contentWord => 
+        contentWord.includes(word) || word.includes(contentWord)
+      )
+    );
     const wordMatchScore = matchingWords.length / queryWords.length;
-    similarity += wordMatchScore * 0.3;
+    similarity += wordMatchScore * 0.4;
     
-    // Metadata boosting
-    if (metadata.cardName && queryLower.includes(metadata.cardName.toLowerCase())) {
-      similarity += 0.3;
-    }
-    if (metadata.bankName && queryLower.includes(metadata.bankName.toLowerCase())) {
-      similarity += 0.2;
+    // Metadata boosting (enhanced for PDF documents)
+    if (metadata.cardName) {
+      const cardNameLower = metadata.cardName.toLowerCase();
+      if (queryLower.includes(cardNameLower) || cardNameLower.includes(queryLower)) {
+        similarity += 0.3;
+      }
     }
     
-    // Feature-specific matching
+    if (metadata.bankName) {
+      const bankNameLower = metadata.bankName.toLowerCase();
+      if (queryLower.includes(bankNameLower) || bankNameLower.includes(queryLower)) {
+        similarity += 0.2;
+      }
+    }
+    
+    if (metadata.section) {
+      const sectionLower = metadata.section.toLowerCase();
+      if (queryLower.includes(sectionLower.split(' ')[0])) {
+        similarity += 0.15;
+      }
+    }
+    
+    // Enhanced feature-specific matching for PDF content
     const featureMatches = [
-      queryLower.includes('annual fee') && contentLower.includes('annual fee'),
-      queryLower.includes('joining fee') && contentLower.includes('joining fee'),
-      queryLower.includes('reward') && (contentLower.includes('reward') || contentLower.includes('point')),
+      // Fee-related
+      (queryLower.includes('annual fee') || queryLower.includes('yearly fee')) && 
+      (contentLower.includes('annual fee') || contentLower.includes('yearly fee')),
+      
+      (queryLower.includes('joining fee') || queryLower.includes('membership fee')) && 
+      (contentLower.includes('joining fee') || contentLower.includes('membership fee')),
+      
+      // Reward-related
+      (queryLower.includes('reward') || queryLower.includes('point')) && 
+      (contentLower.includes('reward') || contentLower.includes('point') || contentLower.includes('earn')),
+      
       queryLower.includes('cashback') && contentLower.includes('cashback'),
-      queryLower.includes('lounge') && contentLower.includes('lounge'),
-      queryLower.includes('travel') && contentLower.includes('travel'),
-      queryLower.includes('interest') && contentLower.includes('interest'),
-      queryLower.includes('eligibility') && contentLower.includes('eligibility')
+      
+      // Benefits
+      (queryLower.includes('lounge') || queryLower.includes('airport')) && 
+      (contentLower.includes('lounge') || contentLower.includes('airport')),
+      
+      (queryLower.includes('travel') || queryLower.includes('insurance')) && 
+      (contentLower.includes('travel') || contentLower.includes('insurance')),
+      
+      // Financial terms
+      (queryLower.includes('interest') || queryLower.includes('apr')) && 
+      (contentLower.includes('interest') || contentLower.includes('apr') || contentLower.includes('finance')),
+      
+      (queryLower.includes('eligibility') || queryLower.includes('criteria')) && 
+      (contentLower.includes('eligibility') || contentLower.includes('criteria') || contentLower.includes('qualify')),
+      
+      // Card networks
+      queryLower.includes('visa') && contentLower.includes('visa'),
+      queryLower.includes('mastercard') && contentLower.includes('mastercard'),
+      queryLower.includes('rupay') && contentLower.includes('rupay'),
+      
+      // Spending categories
+      (queryLower.includes('dining') || queryLower.includes('restaurant')) && 
+      (contentLower.includes('dining') || contentLower.includes('restaurant')),
+      
+      (queryLower.includes('fuel') || queryLower.includes('petrol') || queryLower.includes('gas')) && 
+      (contentLower.includes('fuel') || contentLower.includes('petrol') || contentLower.includes('gas')),
+      
+      (queryLower.includes('grocery') || queryLower.includes('supermarket')) && 
+      (contentLower.includes('grocery') || contentLower.includes('supermarket')),
     ];
     
-    const featureBoost = featureMatches.filter(Boolean).length * 0.1;
+    const featureBoost = featureMatches.filter(Boolean).length * 0.08;
     similarity += featureBoost;
+    
+    // Penalty for very short content (likely extraction errors)
+    if (content.length < 50) {
+      similarity *= 0.5;
+    }
+    
+    // Boost for longer, more comprehensive content
+    if (content.length > 200) {
+      similarity *= 1.1;
+    }
     
     return Math.min(similarity, 1.0);
   }
