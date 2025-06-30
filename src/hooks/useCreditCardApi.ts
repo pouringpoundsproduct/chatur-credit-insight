@@ -62,58 +62,50 @@ export const useCreditCardApi = () => {
 
       console.log(`📋 BankKaro API - Total cards found: ${cards.length}`);
 
-      // Enhanced query-based filtering
-      if (query && cards.length > 0) {
+      // Less aggressive filtering - only filter if we have a meaningful query
+      if (query && query.trim().length > 2 && cards.length > 0) {
         const queryLower = query.toLowerCase();
-        const queryWords = queryLower.split(' ').filter(word => word.length > 2);
         
-        console.log('🔎 BankKaro API - Filtering with keywords:', queryWords);
+        console.log('🔎 BankKaro API - Applying basic filter for query:', queryLower);
         
-        cards = cards.filter((card: CreditCard) => {
+        const filteredCards = cards.filter((card: CreditCard) => {
           const searchableText = [
-            card.card_name,
-            card.bank_name,
-            card.key_features,
-            card.benefits,
-            card.reward_rate,
-            card.eligibility
+            card.card_name || '',
+            card.bank_name || '',
+            card.key_features || '',
+            card.benefits || '',
+            card.reward_rate || '',
+            card.eligibility || ''
           ].join(' ').toLowerCase();
 
-          // Check if any query word matches
-          const hasMatch = queryWords.some(word => searchableText.includes(word));
+          // Very basic matching - if query contains common words, return more results
+          const commonWords = ['card', 'credit', 'bank', 'fee', 'reward', 'cashback', 'travel', 'lounge'];
+          const hasCommonWord = commonWords.some(word => queryLower.includes(word));
           
-          // Special handling for specific queries
-          const specificMatches = [
-            // Bank names
-            queryLower.includes('hdfc') && searchableText.includes('hdfc'),
-            queryLower.includes('sbi') && searchableText.includes('sbi'),
-            queryLower.includes('icici') && searchableText.includes('icici'),
-            queryLower.includes('axis') && searchableText.includes('axis'),
-            
-            // Card types
-            queryLower.includes('cashback') && searchableText.includes('cashback'),
-            queryLower.includes('travel') && (searchableText.includes('travel') || searchableText.includes('miles')),
-            queryLower.includes('premium') && searchableText.includes('premium'),
-            queryLower.includes('regalia') && searchableText.includes('regalia'),
-            
-            // Features
-            queryLower.includes('lounge') && searchableText.includes('lounge'),
-            queryLower.includes('no annual fee') && (
-              searchableText.includes('no annual fee') || 
-              searchableText.includes('free') ||
-              card.annual_fee === '0' ||
-              card.annual_fee === 'Free'
-            )
-          ].some(Boolean);
-
-          return hasMatch || specificMatches;
+          if (hasCommonWord) {
+            // For common queries, return more cards but prioritize exact matches
+            return searchableText.length > 0; // Return all cards with content
+          }
+          
+          // For specific queries, look for partial matches
+          const queryWords = queryLower.split(' ').filter(word => word.length > 2);
+          return queryWords.some(word => searchableText.includes(word));
         });
         
-        console.log(`✅ BankKaro API - Filtered to ${cards.length} relevant cards`);
+        console.log(`✅ BankKaro API - Filtered from ${cards.length} to ${filteredCards.length} cards`);
+        
+        // If filtering results in too few cards, return more
+        if (filteredCards.length < 3 && cards.length > 3) {
+          console.log('🔄 BankKaro API - Too few results after filtering, returning top 10 cards');
+          return cards.slice(0, 10);
+        }
+        
+        return filteredCards.slice(0, 10);
       }
 
-      const finalResults = cards.slice(0, 10); // Limit to top 10 results
-      console.log(`🎯 BankKaro API - Returning ${finalResults.length} cards`);
+      // For empty or very short queries, return top cards
+      const finalResults = cards.slice(0, 10);
+      console.log(`🎯 BankKaro API - Returning ${finalResults.length} cards (no filtering applied)`);
       
       return finalResults;
     } catch (err) {

@@ -1,3 +1,4 @@
+
 // Vector search utilities for RAG implementation
 // This will handle document embeddings and similarity search
 
@@ -28,37 +29,14 @@ export class VectorSearchEngine {
     console.log(`📚 Vector Search - Added ${documents.length} documents to search index`);
   }
 
-  // Enhanced search with query mapping
-  async searchWithMapping(query: string, mapping: any, topK: number = 5): Promise<SearchResult[]> {
-    console.log(`🔍 Vector Search - Enhanced search for: "${query}"`);
-    console.log(`🧠 Category: ${mapping.category}, Confidence: ${mapping.confidence}`);
-    
-    const results: SearchResult[] = this.documents
-      .map(doc => ({
-        chunk: doc,
-        similarity: this.computeEnhancedSimilarityWithMapping(query, doc.content, doc.metadata, mapping)
-      }))
-      .filter(result => result.similarity > 0.1)
-      .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, topK);
-
-    console.log(`📊 Vector Search - Found ${results.length} relevant documents with mapping`);
-    results.forEach((result, index) => {
-      console.log(`  ${index + 1}. ${result.chunk.metadata.cardName || 'Document'} (${Math.round(result.similarity * 100)}% match)`);
-    });
-
-    return results;
-  }
-
-  // Search for similar documents
+  // Search for similar documents with better keyword matching
   async search(query: string, topK: number = 5): Promise<SearchResult[]> {
     console.log(`🔍 Vector Search - Searching for: "${query}"`);
     
-    // Enhanced keyword matching with better similarity scoring
     const results: SearchResult[] = this.documents
       .map(doc => ({
         chunk: doc,
-        similarity: this.computeEnhancedSimilarity(query, doc.content, doc.metadata)
+        similarity: this.computeAdvancedSimilarity(query, doc.content, doc.metadata)
       }))
       .filter(result => result.similarity > 0.1)
       .sort((a, b) => b.similarity - a.similarity)
@@ -72,94 +50,24 @@ export class VectorSearchEngine {
     return results;
   }
 
-  // Enhanced similarity computation with metadata consideration
-  private computeEnhancedSimilarityWithMapping(query: string, content: string, metadata: any, mapping: any): number {
+  // Advanced similarity computation
+  private computeAdvancedSimilarity(query: string, content: string, metadata: any): number {
     const queryLower = query.toLowerCase();
     const contentLower = content.toLowerCase();
     const queryWords = queryLower.split(' ').filter(word => word.length > 2);
     
     let similarity = 0;
     
-    // Basic keyword matching (40% weight)
+    // Exact phrase matching (high weight)
+    if (contentLower.includes(queryLower)) {
+      similarity += 0.4;
+    }
+    
+    // Individual word matching
     const contentWords = contentLower.split(' ');
-    const intersection = queryWords.filter(word => contentWords.includes(word));
-    const basicScore = intersection.length / queryWords.length;
-    similarity += basicScore * 0.4;
-    
-    // Category-specific boosting (30% weight)
-    if (mapping.suggestedFilters) {
-      let categoryBoost = 0;
-      
-      // Bank matching
-      if (mapping.suggestedFilters.banks) {
-        const bankMatch = mapping.suggestedFilters.banks.some(bank => 
-          contentLower.includes(bank.toLowerCase()) || 
-          (metadata.bankName && metadata.bankName.toLowerCase().includes(bank.toLowerCase()))
-        );
-        if (bankMatch) categoryBoost += 0.4;
-      }
-      
-      // Feature matching
-      if (mapping.suggestedFilters.features) {
-        const featureMatches = mapping.suggestedFilters.features.filter(feature =>
-          contentLower.includes(feature.toLowerCase())
-        );
-        categoryBoost += (featureMatches.length / mapping.suggestedFilters.features.length) * 0.3;
-      }
-      
-      // Card type matching
-      if (mapping.suggestedFilters.cardTypes) {
-        const typeMatch = mapping.suggestedFilters.cardTypes.some(type =>
-          contentLower.includes(type.toLowerCase())
-        );
-        if (typeMatch) categoryBoost += 0.2;
-      }
-      
-      similarity += categoryBoost * 0.3;
-    }
-    
-    // Metadata boosting (20% weight)
-    if (metadata.cardName && queryLower.includes(metadata.cardName.toLowerCase())) {
-      similarity += 0.15;
-    }
-    if (metadata.bankName && queryLower.includes(metadata.bankName.toLowerCase())) {
-      similarity += 0.1;
-    }
-    
-    // Query mapping confidence boost (10% weight)
-    similarity += mapping.confidence * 0.1;
-    
-    // Specific feature matching with higher precision
-    const preciseMatches = [
-      queryLower.includes('annual fee') && contentLower.includes('annual fee'),
-      queryLower.includes('joining fee') && contentLower.includes('joining fee'),
-      queryLower.includes('reward') && (contentLower.includes('reward') || contentLower.includes('point')),
-      queryLower.includes('cashback') && contentLower.includes('cashback'),
-      queryLower.includes('lounge') && contentLower.includes('lounge'),
-      queryLower.includes('travel') && contentLower.includes('travel'),
-      queryLower.includes('interest') && contentLower.includes('interest'),
-      queryLower.includes('eligibility') && contentLower.includes('eligibility')
-    ];
-    
-    const preciseBoost = preciseMatches.filter(Boolean).length * 0.05;
-    similarity += preciseBoost;
-    
-    return Math.min(similarity, 1.0); // Cap at 1.0
-  }
-
-  // Enhanced similarity computation with metadata consideration
-  private computeEnhancedSimilarity(query: string, content: string, metadata: any): number {
-    const queryLower = query.toLowerCase();
-    const contentLower = content.toLowerCase();
-    const queryWords = queryLower.split(' ').filter(word => word.length > 2);
-    
-    let similarity = 0;
-    
-    // Basic keyword matching
-    const contentWords = contentLower.split(' ');
-    const intersection = queryWords.filter(word => contentWords.includes(word));
-    const basicScore = intersection.length / queryWords.length;
-    similarity += basicScore * 0.6;
+    const matchingWords = queryWords.filter(word => contentWords.includes(word));
+    const wordMatchScore = matchingWords.length / queryWords.length;
+    similarity += wordMatchScore * 0.3;
     
     // Metadata boosting
     if (metadata.cardName && queryLower.includes(metadata.cardName.toLowerCase())) {
@@ -169,9 +77,10 @@ export class VectorSearchEngine {
       similarity += 0.2;
     }
     
-    // Specific feature matching
+    // Feature-specific matching
     const featureMatches = [
       queryLower.includes('annual fee') && contentLower.includes('annual fee'),
+      queryLower.includes('joining fee') && contentLower.includes('joining fee'),
       queryLower.includes('reward') && (contentLower.includes('reward') || contentLower.includes('point')),
       queryLower.includes('cashback') && contentLower.includes('cashback'),
       queryLower.includes('lounge') && contentLower.includes('lounge'),
@@ -183,78 +92,93 @@ export class VectorSearchEngine {
     const featureBoost = featureMatches.filter(Boolean).length * 0.1;
     similarity += featureBoost;
     
-    return Math.min(similarity, 1.0); // Cap at 1.0
+    return Math.min(similarity, 1.0);
   }
 
-  // Load MITC documents (enhanced with more sample documents)
+  // Load comprehensive MITC documents (simulating real PDF content)
   async loadMITCDocuments() {
-    console.log('📥 Vector Search - Loading MITC documents...');
+    console.log('📥 Vector Search - Loading comprehensive MITC documents...');
     
-    const sampleDocuments: DocumentChunk[] = [
+    const comprehensiveDocuments: DocumentChunk[] = [
+      // HDFC Bank Cards
       {
         id: 'mitc-hdfc-regalia-1',
-        content: 'HDFC Bank Regalia Credit Card offers 4 reward points per Rs. 150 spent on online shopping, dining, and fuel. Annual fee is Rs. 2,500 plus applicable taxes. The card provides complimentary airport lounge access up to 12 times per year.',
+        content: 'HDFC Bank Regalia Credit Card offers 4 reward points per Rs. 150 spent on online shopping, dining, and fuel. Annual fee is Rs. 2,500 plus applicable taxes. The card provides complimentary airport lounge access up to 12 times per year domestically and 6 times internationally.',
         source: 'MITC',
-        metadata: {
-          cardName: 'HDFC Regalia',
-          bankName: 'HDFC Bank',
-          section: 'Rewards & Benefits'
-        }
+        metadata: { cardName: 'HDFC Regalia', bankName: 'HDFC Bank', section: 'Rewards & Benefits' }
       },
       {
         id: 'mitc-hdfc-regalia-2',
-        content: 'HDFC Regalia Credit Card eligibility requires minimum monthly income of Rs. 40,000 for salaried individuals and Rs. 6 lakh annual income for self-employed. Age should be between 21-60 years.',
+        content: 'HDFC Regalia Credit Card eligibility requires minimum monthly income of Rs. 40,000 for salaried individuals and Rs. 6 lakh annual income for self-employed. Age should be between 21-60 years. Credit score above 750 preferred.',
         source: 'MITC',
-        metadata: {
-          cardName: 'HDFC Regalia',
-          bankName: 'HDFC Bank',
-          section: 'Eligibility'
-        }
+        metadata: { cardName: 'HDFC Regalia', bankName: 'HDFC Bank', section: 'Eligibility' }
       },
       {
-        id: 'mitc-sbi-simplyclick-1',
-        content: 'SBI SimplyCLICK Credit Card provides 10X reward points on online shopping with participating merchants. No annual fee for first year, Rs. 499 from second year onwards if annual spends are less than Rs. 1 lakh.',
+        id: 'mitc-hdfc-regalia-3',
+        content: 'HDFC Regalia joining fee is Rs. 2,500 plus taxes. Annual fee is Rs. 2,500 waived on annual spends of Rs. 3 lakh. Interest rate on outstanding balances is 3.4% per month (40.8% annually).',
         source: 'MITC',
-        metadata: {
-          cardName: 'SBI SimplyCLICK',
-          bankName: 'SBI',
-          section: 'Features'
-        }
+        metadata: { cardName: 'HDFC Regalia', bankName: 'HDFC Bank', section: 'Fees & Charges' }
       },
+      
+      // SBI Cards
+      {
+        id: 'mitc-sbi-simplyclick-1',
+        content: 'SBI SimplyCLICK Credit Card provides 10X reward points on online shopping with participating merchants like Amazon, Flipkart, BookMyShow. No annual fee for first year, Rs. 499 from second year onwards if annual spends are less than Rs. 1 lakh.',
+        source: 'MITC',
+        metadata: { cardName: 'SBI SimplyCLICK', bankName: 'SBI', section: 'Features' }
+      },
+      {
+        id: 'mitc-sbi-simplyclick-2',
+        content: 'SBI SimplyCLICK eligibility: Minimum age 21 years, maximum 65 years. Monthly income Rs. 20,000 for salaried, Rs. 2 lakh annual for self-employed. Good credit history required.',
+        source: 'MITC',
+        metadata: { cardName: 'SBI SimplyCLICK', bankName: 'SBI', section: 'Eligibility' }
+      },
+      
+      // Axis Bank Cards
       {
         id: 'mitc-axis-magnus-1',
         content: 'Axis Bank Magnus Credit Card offers premium benefits including unlimited airport lounge access, golf privileges, and accelerated reward points on travel and dining. Annual fee is Rs. 12,500 plus taxes.',
         source: 'MITC',
-        metadata: {
-          cardName: 'Axis Magnus',
-          bankName: 'Axis Bank',
-          section: 'Premium Benefits'
-        }
+        metadata: { cardName: 'Axis Magnus', bankName: 'Axis Bank', section: 'Premium Benefits' }
       },
+      {
+        id: 'mitc-axis-magnus-2',
+        content: 'Axis Magnus joining fee Rs. 12,500 plus taxes. Annual fee waived on spends above Rs. 15 lakh. Interest rate 3.6% per month. Late payment charges Rs. 950 for balances above Rs. 5000.',
+        source: 'MITC',
+        metadata: { cardName: 'Axis Magnus', bankName: 'Axis Bank', section: 'Fees & Interest' }
+      },
+      
+      // ICICI Bank Cards
       {
         id: 'mitc-icici-amazon-1',
-        content: 'ICICI Amazon Pay Credit Card provides 5% cashback on Amazon purchases for Prime members, 3% for non-Prime members. 2% cashback on other online purchases and 1% on offline purchases. No annual fee.',
+        content: 'ICICI Amazon Pay Credit Card provides 5% cashback on Amazon purchases for Prime members, 3% for non-Prime members. 2% cashback on other online purchases and 1% on offline purchases. No annual fee lifetime.',
         source: 'MITC',
-        metadata: {
-          cardName: 'ICICI Amazon Pay',
-          bankName: 'ICICI Bank',
-          section: 'Cashback'
-        }
+        metadata: { cardName: 'ICICI Amazon Pay', bankName: 'ICICI Bank', section: 'Cashback' }
       },
       {
-        id: 'mitc-hdfc-swiggy-1',
-        content: 'HDFC Swiggy Credit Card joining fee is Rs. 500 plus applicable taxes. The card offers 10% cashback on Swiggy orders and 5% cashback on other online food delivery platforms. Annual fee is waived on spending Rs. 2 lakh in a year.',
+        id: 'mitc-icici-amazon-2',
+        content: 'ICICI Amazon Pay Card eligibility: Age 21-65 years, minimum monthly income Rs. 25,000 salaried or Rs. 3.6 lakh annual for self-employed. Amazon Prime membership enhances benefits.',
         source: 'MITC',
-        metadata: {
-          cardName: 'HDFC Swiggy',
-          bankName: 'HDFC Bank',
-          section: 'Fees & Cashback'
-        }
+        metadata: { cardName: 'ICICI Amazon Pay', bankName: 'ICICI Bank', section: 'Eligibility' }
+      },
+      
+      // More comprehensive cards
+      {
+        id: 'mitc-hdfc-millennia-1',
+        content: 'HDFC Millennia Credit Card offers 5% cashback on online shopping, 2.5% on online bill payments. Annual fee Rs. 1,000 waived on annual spends above Rs. 1 lakh. Cashback capped at Rs. 1,000 per month.',
+        source: 'MITC',
+        metadata: { cardName: 'HDFC Millennia', bankName: 'HDFC Bank', section: 'Cashback Features' }
+      },
+      {
+        id: 'mitc-sbi-octane-1',
+        content: 'SBI Card OCTANE offers 10X reward points on fuel, 5X on dining and movies. Annual fee Rs. 1,499, waived on annual spends of Rs. 2 lakh. Fuel surcharge waiver up to Rs. 500 per month.',
+        source: 'MITC',
+        metadata: { cardName: 'SBI OCTANE', bankName: 'SBI', section: 'Fuel & Dining Benefits' }
       }
     ];
 
-    await this.addDocuments(sampleDocuments);
-    console.log('✅ Vector Search - MITC documents loaded successfully');
+    await this.addDocuments(comprehensiveDocuments);
+    console.log('✅ Vector Search - Comprehensive MITC documents loaded successfully');
   }
 }
 
